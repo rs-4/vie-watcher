@@ -1,0 +1,23 @@
+[Unit]
+Description=VIE Watcher - poll Business France & notify Discord
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/vie-watcher
+EnvironmentFile=/etc/vie-watcher.env
+ExecStart=/usr/bin/node /opt/vie-watcher/watcher.js
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+# Hardening léger
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/vie-watcher
+
+[Install]
+WantedBy=multi-user.target
