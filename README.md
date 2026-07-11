@@ -17,10 +17,12 @@ Create a local `.env` file, or `/etc/vie-watcher.env` in production:
 ```bash
 DISCORD_WEBHOOK=https://discord.com/api/webhooks/XXXX/YYYY
 POLL_MS=10000
+VIE_API_KEY=public_key_from_mon_vie_site
 ```
 
 Optional variables:
 
+- `VIE_API_KEY=...` for the `X-API-KEY` header required by the Business France API
 - `VIE_LIMIT=30`
 - `STATE_FILE=/opt/vie-watcher/state.json`
 - `DRY_RUN=1` to test without sending Discord messages

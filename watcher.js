@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const API = process.env.VIE_API_URL || "https://civiweb-api-prd.azurewebsites.net/api/Offers/search";
+const API_KEY = process.env.VIE_API_KEY || "";
 const WEBHOOK = process.env.DISCORD_WEBHOOK || "";
 const STATE_FILE = process.env.STATE_FILE || path.join(__dirname, "state.json");
 const POLL_MS = Number(process.env.POLL_MS || 10_000);
@@ -46,13 +47,16 @@ function saveState(state, file = STATE_FILE) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function fetchOffers(fetchImpl = fetch) {
+  const headers = {
+    "content-type": "application/json",
+    referer: "https://mon-vie-via.businessfrance.fr/",
+    "user-agent": "vie-watcher/1.0 (+https://github.com/rs-4/vie-watcher)",
+  };
+  if (API_KEY) headers["X-API-KEY"] = API_KEY;
+
   const res = await fetchImpl(API, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      referer: "https://mon-vie-via.businessfrance.fr/",
-      "user-agent": "vie-watcher/1.0 (+https://github.com/rs-4/vie-watcher)",
-    },
+    headers,
     body: JSON.stringify(SEARCH_BODY),
   });
 
@@ -75,6 +79,17 @@ function clean(value, fallback = "—") {
   return text || fallback;
 }
 
+function formatSalary(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return "Indemnité indisponible";
+  return `${new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)}/mois`;
+}
+
 function toEmbed(offer) {
   const description = clean(offer.missionDescription, "")
     .replace(/\s+/g, " ")
@@ -93,6 +108,7 @@ function toEmbed(offer) {
     fields: [
       { name: "Type", value: clean(offer.missionType), inline: true },
       { name: "Durée", value: duration, inline: true },
+      { name: "Salaire", value: formatSalary(offer.indemnite), inline: true },
       { name: "Lieu", value: location, inline: true },
       { name: "Entreprise", value: clean(offer.organizationName), inline: true },
       { name: "ID", value: String(offer.id), inline: true },
@@ -205,6 +221,7 @@ if (require.main === module) {
 module.exports = {
   clean,
   fetchOffers,
+  formatSalary,
   freshOffers,
   loadState,
   offerUrl,
