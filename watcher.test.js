@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { formatSalary, freshOffers, offerUrl, tick, toEmbed } = require("./watcher");
+const { formatSalary, freshOffers, importantMatches, offerUrl, tick, toEmbed } = require("./watcher");
 
 function jsonResponse(body, status = 200) {
   return {
@@ -30,18 +30,35 @@ test("formatSalary formats monthly VIE allowance", () => {
   assert.equal(formatSalary(null), "Indemnité indisponible");
 });
 
-test("toEmbed formats a Discord embed", () => {
+test("importantMatches detects software engineering offers", () => {
+  const matches = importantMatches({
+    missionTitle: "React Native / Expo Software Engineer",
+    missionDescription: "Build a Next.js dashboard with TypeScript, Node.js and Supabase.",
+    missionProfile: "JavaScript/React experience required.",
+  });
+
+  assert.ok(matches.includes("Software Engineer"));
+  assert.ok(matches.includes("React Native"));
+  assert.ok(matches.includes("Expo"));
+  assert.ok(matches.includes("Next.js"));
+  assert.ok(matches.includes("TypeScript"));
+});
+
+test("toEmbed marks software engineering offers as important", () => {
   const embed = toEmbed({
     id: 1,
     missionTitle: "Dev",
     organizationName: "ACME",
-    missionDescription: "Hello\nworld",
+    missionDescription: "Hello world — React Native Expo TypeScript",
     missionDuration: 12,
     indemnite: 2692.7,
     cityName: "Paris",
     countryName: "France",
   });
-  assert.equal(embed.title, "Dev — ACME");
+  assert.equal(embed.title, "🚨 IMPORTANT — Dev — ACME");
+  assert.equal(embed.color, 0xe74c3c);
+  assert.equal(embed.fields[0].name, "🚨 Important");
+  assert.match(embed.fields[0].value, /React Native/);
   assert.equal(embed.url, offerUrl(1));
   assert.match(embed.description, /Hello world/);
   assert.equal(embed.fields.find((field) => field.name === "Durée").value, "12 mois");

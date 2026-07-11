@@ -31,6 +31,30 @@ const SEARCH_BODY = {
   missionStartDate: null,
 };
 
+const IMPORTANT_TECH_KEYWORDS = [
+  { label: "Software Engineer", pattern: /\bsoftware\s+(engineer|developer)\b|ing[ée]nieur\s+logiciel|d[ée]veloppeur\s+logiciel/iu },
+  { label: "Full-stack", pattern: /\bfull[-\s]?stack\b|\bfullstack\b/iu },
+  { label: "Frontend", pattern: /\bfront[-\s]?end\b|\bfrontend\b|int[ée]grateur\s+web/iu },
+  { label: "Backend", pattern: /\bback[-\s]?end\b|\bbackend\b|api\s+developer/iu },
+  { label: "Mobile", pattern: /\bmobile\b|app\s+mobile|application\s+mobile|(?<![\p{L}\p{N}_])ios(?![\p{L}\p{N}_])|(?<![\p{L}\p{N}_])android(?![\p{L}\p{N}_])/iu },
+  { label: "JavaScript", pattern: /\bjava\s*script\b|\bjavascript\b|\bjs\b|\becmascript\b|\bes\d{4}\b/iu },
+  { label: "TypeScript", pattern: /\btype\s*script\b|\btypescript\b|\bts\b/iu },
+  { label: "React", pattern: /\breact(?:\.js|js)?\b|\breactjs\b/iu },
+  { label: "React Native", pattern: /\breact\s+native\b|\brn\b/iu },
+  { label: "Expo", pattern: /\bexpo\b|\beas\b|expo\s+application\s+services/iu },
+  { label: "Next.js", pattern: /\bnext(?:\.js|js)?\b|\bnextjs\b/iu },
+  { label: "Node.js", pattern: /\bnode(?:\.js|js)?\b|\bnodejs\b|\bnpm\b|\byarn\b|\bpnpm\b|\bbun\b/iu },
+  { label: "Web", pattern: /\bweb\b|site\s+web|application\s+web|webapp|pwa|saas/iu },
+  { label: "Vue", pattern: /\bvue(?:\.js|js)?\b|\bnuxt(?:\.js|js)?\b/iu },
+  { label: "Angular", pattern: /\bangular\b|\brxjs\b/iu },
+  { label: "Svelte", pattern: /\bsvelte\b|\bsveltekit\b/iu },
+  { label: "CSS/UI", pattern: /\bcss\b|\bhtml\b|tailwind|sass|scss|ui\s*\/\s*ux|design\s+system/iu },
+  { label: "Cloud/DevOps", pattern: /\baws\b|\bgcp\b|azure|docker|kubernetes|\bk8s\b|terraform|ci\s*\/\s*cd|devops/iu },
+  { label: "Database", pattern: /postgres|postgresql|mysql|mongodb|redis|sqlite|supabase|firebase|graphql|rest\s+api/iu },
+  { label: "AI/Data", pattern: /artificial\s+intelligence|intelligence\s+artificielle|machine\s+learning|\bml\b|llm|openai|data\s+engineer|data\s+engineering|python|pandas/iu },
+  { label: "Product/Growth Tech", pattern: /growth\s+engineer|marketing\s+automation|hubspot|salesforce|analytics|tracking|crm/iu },
+];
+
 function loadState(file = STATE_FILE) {
   try {
     return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -90,6 +114,36 @@ function formatSalary(value) {
   }).format(amount)}/mois`;
 }
 
+function offerSearchText(offer) {
+  const specializationLabels = (offer.specializations || [])
+    .map((specialization) => `${specialization.specializationLabel || ""} ${specialization.specializationLabelEn || ""}`)
+    .join(" ");
+
+  return [
+    offer.missionTitle,
+    offer.missionDescription,
+    offer.missionProfile,
+    offer.organizationName,
+    offer.activitySectorN1,
+    offer.activitySectorN2,
+    offer.activitySectorN3,
+    specializationLabels,
+  ]
+    .map((value) => (value === undefined || value === null ? "" : String(value)))
+    .join("\n");
+}
+
+function importantMatches(offer) {
+  const haystack = offerSearchText(offer);
+  return IMPORTANT_TECH_KEYWORDS
+    .filter(({ pattern }) => pattern.test(haystack))
+    .map(({ label }) => label);
+}
+
+function importantSummary(matches) {
+  return matches.slice(0, 12).join(", ") + (matches.length > 12 ? ` +${matches.length - 12}` : "");
+}
+
 function toEmbed(offer) {
   const description = clean(offer.missionDescription, "")
     .replace(/\s+/g, " ")
@@ -99,32 +153,42 @@ function toEmbed(offer) {
   const country = clean(offer.countryName || offer.country);
   const city = clean(offer.cityName);
   const location = [city, country].filter((v) => v && v !== "—").join(", ") || "—";
+  const matches = importantMatches(offer);
+  const important = matches.length > 0;
+  const fields = [
+    { name: "Type", value: clean(offer.missionType), inline: true },
+    { name: "Durée", value: duration, inline: true },
+    { name: "Salaire", value: formatSalary(offer.indemnite), inline: true },
+    { name: "Lieu", value: location, inline: true },
+    { name: "Entreprise", value: clean(offer.organizationName), inline: true },
+    { name: "ID", value: String(offer.id), inline: true },
+  ];
+
+  if (important) {
+    fields.unshift({ name: "🚨 Important", value: importantSummary(matches), inline: false });
+  }
 
   return {
-    title: `${clean(offer.missionTitle, `Offre VIE #${offer.id}`)} — ${clean(offer.organizationName)}`.slice(0, 256),
+    title: `${important ? "🚨 IMPORTANT — " : ""}${clean(offer.missionTitle, `Offre VIE #${offer.id}`)} — ${clean(offer.organizationName)}`.slice(0, 256),
     url: offerUrl(offer.id),
-    color: 0x2e86de,
+    color: important ? 0xe74c3c : 0x2e86de,
     description: description ? `${description}${description.length === 300 ? "…" : ""}` : "",
-    fields: [
-      { name: "Type", value: clean(offer.missionType), inline: true },
-      { name: "Durée", value: duration, inline: true },
-      { name: "Salaire", value: formatSalary(offer.indemnite), inline: true },
-      { name: "Lieu", value: location, inline: true },
-      { name: "Entreprise", value: clean(offer.organizationName), inline: true },
-      { name: "ID", value: String(offer.id), inline: true },
-    ],
+    fields,
     timestamp: new Date().toISOString(),
   };
 }
 
 async function sendToDiscord(offer, fetchImpl = fetch) {
+  const matches = importantMatches(offer);
   const payload = {
     username: "VIE Watcher",
+    content: matches.length ? `🚨 **IMPORTANT — match software engineer**: ${importantSummary(matches)}` : undefined,
     embeds: [toEmbed(offer)],
   };
 
   if (DRY_RUN) {
-    console.log(`[dry-run] Nouvelle offre: [${offer.id}] ${clean(offer.missionTitle)}`);
+    const importantLog = matches.length ? ` [IMPORTANT: ${importantSummary(matches)}]` : "";
+    console.log(`[dry-run] Nouvelle offre${importantLog}: [${offer.id}] ${clean(offer.missionTitle)}`);
     return;
   }
 
@@ -223,6 +287,7 @@ module.exports = {
   fetchOffers,
   formatSalary,
   freshOffers,
+  importantMatches,
   loadState,
   offerUrl,
   saveState,
